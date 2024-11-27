@@ -6,9 +6,6 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- Botón para suscribirse al tema MQTT -->
-
-    <!-- TextView para mostrar mensajes MQTT recibidos -->
     <TextView
         android:id="@+id/msg_view"
         android:layout_width="match_parent"
@@ -19,7 +16,6 @@
         android:text="Esperando mensajes..."
         android:textSize="16sp" />
 
-    <!-- EditText para ingresar el mensaje a enviar -->
     <EditText
         android:id="@+id/mandarmsg_input"
         android:layout_width="match_parent"
@@ -28,8 +24,6 @@
         android:hint="Escribe tu mensaje"
         android:inputType="text"
         android:minHeight="48dp" />
-
-    <!-- Botón para enviar el mensaje al tema MQTT -->
 
     <Button
         android:id="@+id/enviar_button"

@@ -22,9 +22,11 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 public class MainActivity extends AppCompatActivity {
 
     private MqttAndroidClient client;
-    private TextView messageView; // Para mostrar mensajes de MQTT
-    private EditText messageInput; // Para escribir mensajes a enviar
+    private TextView mensView; // Para mostrar mensajes de MQTT
+    private EditText mensOut; // Para escribir mensajes a enviar
+    private static final String BROKER_URL = "test.mosquitto.org:1883"; // Broker MQTT
     private static final String TOPIC = "test/app"; // Tema MQTT
+    private static final String TAG = "MQTT"; // Tag para logs
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,14 +34,14 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Inicialización de vistas
-        messageView = findViewById(R.id.msg_view);
-        messageInput = findViewById(R.id.mandarmsg_input);
+        mensView = findViewById(R.id.msg_view);
+        mensOut = findViewById(R.id.mandarmsg_input);
         Button subscribeButton = findViewById(R.id.subscribe_btn);
         Button sendButton = findViewById(R.id.enviar_button);
 
         // Configurar cliente MQTT
         String clientId = MqttClient.generateClientId();
-        client = new MqttAndroidClient(this.getApplicationContext(), "tcp://test.mosquitto.org:1883", clientId);
+        client = new MqttAndroidClient(this.getApplicationContext(), BROKER_URL, clientId);
 
         // Conectar al broker MQTT
         connectToBroker();
@@ -49,9 +51,11 @@ public class MainActivity extends AppCompatActivity {
 
         // Botón para enviar un mensaje al tema MQTT
         sendButton.setOnClickListener(v -> {
-            String message = messageInput.getText().toString();
+            String message = mensOut.getText().toString();
             if (!message.isEmpty()) {
                 publishMessage(message);
+            } else {
+                Log.w(TAG, "Intento de enviar un mensaje vacío");
             }
         });
     }
@@ -60,27 +64,31 @@ public class MainActivity extends AppCompatActivity {
     private void connectToBroker() {
         try {
             MqttConnectOptions options = new MqttConnectOptions();
-            options.setCleanSession(true); // Restablecer sesión para evitar mensajes no deseados
+            options.setCleanSession(true);
+
             client.connect(options, null, new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
                     Log.d("MQTT", "Conexión exitosa");
+                    subscribeToTopic();
                 }
 
                 @Override
                 public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
                     Log.e("MQTT", "Error al conectar", exception);
+                    runOnUiThread(() -> mensView.setText("Error al conectar al broker MQTT"));
                 }
             });
         } catch (MqttException e) {
-            e.printStackTrace();
+            Log.e("MQTT", "Error al intentar conectar", e);
+        } catch (Exception e) {
+            Log.e("MQTT", "Excepción inesperada", e);
         }
     }
-
     // Suscribirse al tema MQTT
     private void subscribeToTopic() {
         try {
-            client.subscribe(TOPIC, 0); // Nivel de QoS 0
+            client.subscribe(TOPIC, 0);
             client.setCallback(new MqttCallback() {
                 @Override
                 public void connectionLost(Throwable cause) {
@@ -89,8 +97,7 @@ public class MainActivity extends AppCompatActivity {
 
                 @Override
                 public void messageArrived(String topic, MqttMessage message) {
-                    // Mostrar mensaje recibido
-                    runOnUiThread(() -> messageView.setText("Mensaje: " + message.toString()));
+                    runOnUiThread(() -> mensView.append("\nMensaje recibido: " + message.toString()));
                 }
 
                 @Override
@@ -100,19 +107,25 @@ public class MainActivity extends AppCompatActivity {
             });
             Log.d("MQTT", "Suscrito al tema: " + TOPIC);
         } catch (MqttException e) {
-            e.printStackTrace();
+            Log.e("MQTT", "Error al suscribirse al tema", e);
+        } catch (Exception e) {
+            Log.e("MQTT", "Excepción inesperada durante la suscripción", e);
         }
     }
 
     // Publicar un mensaje al tema MQTT
     private void publishMessage(String message) {
         try {
-            MqttMessage mqttMessage = new MqttMessage();
-            mqttMessage.setPayload(message.getBytes()); // Convertir mensaje a bytes
-            client.publish(TOPIC, mqttMessage);
-            Log.d("MQTT", "Mensaje enviado: " + message);
+            if (client.isConnected()) {
+                MqttMessage mqttMessage = new MqttMessage();
+                mqttMessage.setPayload(message.getBytes()); // Convertir mensaje a bytes
+                client.publish(TOPIC, mqttMessage);
+                Log.d(TAG, "Mensaje enviado: " + message);
+            } else {
+                Log.w(TAG, "No se puede enviar el mensaje, cliente MQTT no conectado");
+            }
         } catch (MqttException e) {
-            e.printStackTrace();
+            Log.e(TAG, "Error al enviar el mensaje: " + message, e);
         }
     }
 
@@ -120,11 +133,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         try {
-            if (client != null) {
+            if (client != null && client.isConnected()) {
                 client.disconnect();
+                client.unregisterResources();
             }
         } catch (MqttException e) {
-            e.printStackTrace();
+            Log.e(TAG, "Error al desconectar el cliente MQTT", e);
         }
     }
 }
